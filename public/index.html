@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AR Publisher</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0f; --surface: #111118; --border: #222230;
+      --accent: #e8ff47; --accent2: #47ffcc; --text: #f0f0f5;
+      --muted: #5a5a72; --error: #ff4757; --mono: 'Space Mono', monospace; --display: 'Syne', sans-serif;
+    }
+    html, body { background: var(--bg); color: var(--text); font-family: var(--display); min-height: 100vh; }
+    body::before {
+      content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background-image: linear-gradient(rgba(232,255,71,.03) 1px,transparent 1px), linear-gradient(90deg,rgba(232,255,71,.03) 1px,transparent 1px);
+      background-size: 40px 40px;
+    }
+    .wrapper { position: relative; z-index: 1; max-width: 780px; margin: 0 auto; padding: 3rem 1.5rem 6rem; }
+
+    /* Header */
+    header { display: flex; align-items: flex-end; gap: 1.5rem; margin-bottom: 3rem; }
+    .logo { width: 50px; height: 50px; background: var(--accent2); display: grid; place-items: center; flex-shrink: 0; clip-path: polygon(0 0,100% 0,100% 70%,70% 100%,0 100%); }
+    h1 { font-size: clamp(1.8rem,5vw,2.6rem); font-weight: 800; letter-spacing: -.03em; line-height: 1; }
+    h1 span { color: var(--accent2); }
+    .tagline { font-family: var(--mono); font-size: .72rem; color: var(--muted); margin-top: .4rem; }
+
+    /* Card */
+    .card { background: var(--surface); border: 1px solid var(--border); padding: 1.8rem; margin-bottom: 1.2rem; }
+    .card-label { font-family: var(--mono); font-size: .62rem; letter-spacing: .12em; color: var(--muted); text-transform: uppercase; margin-bottom: 1.2rem; display: flex; align-items: center; gap: .6rem; }
+    .card-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* Drop zones side by side */
+    .drop-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .drop-zone { border: 2px dashed var(--border); padding: 2rem 1rem; text-align: center; cursor: pointer; position: relative; transition: border-color .2s, background .2s; }
+    .drop-zone.over { border-color: var(--accent2); background: rgba(71,255,204,.04); }
+    .drop-zone.filled { border-color: var(--accent2); border-style: solid; }
+    .drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+    .drop-icon { font-size: 1.8rem; display: block; margin-bottom: .5rem; }
+    .drop-label { font-family: var(--mono); font-size: .7rem; color: var(--muted); }
+    .drop-name { font-family: var(--mono); font-size: .68rem; color: var(--accent2); margin-top: .4rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 .5rem; min-height: 1rem; }
+
+    /* Fields */
+    .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .field { display: flex; flex-direction: column; gap: .4rem; }
+    .field.full { grid-column: 1/-1; }
+    label { font-family: var(--mono); font-size: .62rem; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+    input[type=text], input[type=password] {
+      background: var(--bg); border: 1px solid var(--border); color: var(--text);
+      font-family: var(--mono); font-size: .85rem; padding: .65rem .9rem; outline: none; transition: border-color .2s; width: 100%;
+    }
+    input:focus { border-color: var(--accent2); }
+    .hint { font-family: var(--mono); font-size: .62rem; color: var(--muted); margin-top: .2rem; }
+    .hint a { color: var(--accent2); text-decoration: none; }
+
+    /* Token status */
+    .token-row { display: flex; gap: .6rem; align-items: flex-end; }
+    .token-row .field { flex: 1; }
+    .btn-sm { font-family: var(--mono); font-size: .68rem; padding: .65rem 1rem; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; transition: border-color .15s, color .15s; white-space: nowrap; flex-shrink: 0; }
+    .btn-sm:hover { border-color: var(--accent2); color: var(--accent2); }
+    #token-status { font-family: var(--mono); font-size: .68rem; margin-top: .5rem; }
+    #token-status.ok  { color: var(--accent2); }
+    #token-status.err { color: var(--error); }
+
+    /* Toggle */
+    .toggle-row { display: flex; align-items: center; gap: .8rem; margin-bottom: 1rem; }
+    .toggle { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; inset: 0; background: var(--border); cursor: pointer; transition: background .2s; border-radius: 2px; }
+    .slider::before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: var(--muted); transition: transform .2s, background .2s; }
+    .toggle input:checked + .slider { background: rgba(71,255,204,.2); }
+    .toggle input:checked + .slider::before { transform: translateX(18px); background: var(--accent2); }
+    .toggle-label { font-family: var(--mono); font-size: .72rem; color: var(--text); }
+
+    /* Action button */
+    .btn-primary { background: var(--accent2); color: #000; font-family: var(--display); font-weight: 800; font-size: .9rem; letter-spacing: .04em; border: none; padding: .85rem 2rem; cursor: pointer; text-transform: uppercase; transition: background .15s, transform .1s; width: 100%; margin-top: .5rem; }
+    .btn-primary:hover:not(:disabled) { background: #2ee8b5; }
+    .btn-primary:active:not(:disabled) { transform: scale(.99); }
+    .btn-primary:disabled { opacity: .35; cursor: not-allowed; }
+
+    /* Result */
+    #result-sec { display: none; }
+    .result-box { background: var(--bg); border: 1px solid var(--accent2); padding: 1.4rem 1.6rem; }
+    .result-title { font-weight: 800; font-size: 1rem; margin-bottom: 1rem; color: var(--accent2); }
+    .result-row { display: flex; align-items: center; gap: .8rem; margin-bottom: .6rem; flex-wrap: wrap; }
+    .result-row label { margin: 0; flex-shrink: 0; }
+    .result-url { font-family: var(--mono); font-size: .72rem; color: var(--text); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .btn-copy { font-family: var(--mono); font-size: .65rem; padding: .3rem .7rem; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; transition: all .15s; }
+    .btn-copy:hover { border-color: var(--accent2); color: var(--accent2); }
+    .btn-dl { font-family: var(--mono); font-size: .68rem; padding: .45rem 1rem; border: 1px solid var(--accent); color: var(--accent); background: transparent; cursor: pointer; text-decoration: none; display: inline-block; transition: all .15s; }
+    .btn-dl:hover { background: var(--accent); color: #000; }
+    .pages-note { font-family: var(--mono); font-size: .65rem; color: var(--muted); margin-top: .8rem; line-height: 1.6; }
+    .pages-note a { color: var(--accent2); }
+
+    /* Loading */
+    #loading { display: none; text-align: center; padding: 1.5rem; }
+    .spinner { width: 28px; height: 28px; border: 2px solid var(--border); border-top-color: var(--accent2); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 1rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-txt { font-family: var(--mono); font-size: .72rem; color: var(--muted); }
+
+    /* Reset */
+    #reset-btn { display: none; background: none; border: 1px solid var(--border); color: var(--muted); font-family: var(--mono); font-size: .68rem; padding: .5rem 1.2rem; cursor: pointer; margin-top: 1rem; transition: all .15s; }
+    #reset-btn:hover { border-color: var(--text); color: var(--text); }
+
+    /* Toast */
+    #toast { position: fixed; bottom: 2rem; right: 2rem; background: var(--surface); border: 1px solid var(--border); font-family: var(--mono); font-size: .72rem; padding: .7rem 1.1rem; opacity: 0; transform: translateY(8px); transition: opacity .2s, transform .2s; pointer-events: none; z-index: 999; }
+    #toast.show { opacity: 1; transform: none; }
+    #toast.ok  { border-color: var(--accent2); color: var(--accent2); }
+    #toast.err { border-color: var(--error); color: var(--error); }
+
+    @media(max-width:580px) { .drop-row,.fields { grid-template-columns: 1fr; } .field.full { grid-column: 1; } }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+
+  <header>
+    <div class="logo">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+        <path d="M12 2L2 7l10 5 10-5-10-5z" fill="#000"/>
+        <path d="M2 17l10 5 10-5" stroke="#000" stroke-width="2" fill="none"/>
+        <path d="M2 12l10 5 10-5" stroke="#000" stroke-width="2" fill="none"/>
+      </svg>
+    </div>
+    <div>
+      <h1>AR <span>Publisher</span></h1>
+      <p class="tagline">// drop models → generate page → live GitHub link</p>
+    </div>
+  </header>
+
+  <!-- Step 1: Models -->
+  <div class="card">
+    <div class="card-label">01 — Upload Your Models</div>
+    <div class="drop-row">
+      <div class="drop-zone" id="dz-glb">
+        <input type="file" id="fi-glb" accept=".glb" />
+        <span class="drop-icon">📦</span>
+        <div class="drop-label">Drop .GLB file</div>
+        <div class="drop-name" id="glb-name">no file selected</div>
+      </div>
+      <div class="drop-zone" id="dz-usdz">
+        <input type="file" id="fi-usdz" accept=".usdz" />
+        <span class="drop-icon">🍎</span>
+        <div class="drop-label">Drop .USDZ file</div>
+        <div class="drop-name" id="usdz-name">no file selected</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Customize -->
+  <div class="card">
+    <div class="card-label">02 — Customize Page</div>
+    <div class="fields">
+      <div class="field">
+        <label for="f-slug">Model name (used in URL)</label>
+        <input type="text" id="f-slug" placeholder="e.g. burger, sushi-platter" />
+        <div class="hint">lowercase, no spaces</div>
+      </div>
+      <div class="field">
+        <label for="f-brand">Brand text on button</label>
+        <input type="text" id="f-brand" placeholder="e.g. NOBU, PIZZA CO" />
+      </div>
+      <div class="field full">
+        <label for="f-label">Top label text</label>
+        <input type="text" id="f-label" placeholder="e.g. On the menu, New arrival" value="On the menu" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: GitHub -->
+  <div class="card">
+    <div class="card-label">03 — GitHub (optional — for auto-publish)</div>
+
+    <div class="toggle-row">
+      <label class="toggle">
+        <input type="checkbox" id="gh-toggle" />
+        <span class="slider"></span>
+      </label>
+      <span class="toggle-label">Auto-publish to GitHub Pages</span>
+    </div>
+
+    <div id="gh-fields" style="display:none">
+      <div class="token-row">
+        <div class="field">
+          <label for="f-token">GitHub Personal Access Token</label>
+          <input type="password" id="f-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off" />
+          <div class="hint">
+            Create one at <a href="https://github.com/settings/tokens/new" target="_blank">github.com/settings/tokens/new</a>
+            — needs <strong>repo</strong> + <strong>pages</strong> scopes
+          </div>
+        </div>
+        <button class="btn-sm" id="verify-btn">Verify</button>
+      </div>
+      <div id="token-status"></div>
+    </div>
+  </div>
+
+  <!-- Build button -->
+  <div class="card">
+    <div class="card-label">04 — Build</div>
+    <button class="btn-primary" id="build-btn" disabled>Generate AR Site →</button>
+  </div>
+
+  <!-- Loading -->
+  <div class="card" id="loading">
+    <div class="spinner"></div>
+    <div class="loading-txt" id="loading-txt">Building your AR site…</div>
+  </div>
+
+  <!-- Result -->
+  <div class="card" id="result-sec">
+    <div class="result-box">
+      <div class="result-title">✓ AR Site Ready</div>
+
+      <div class="result-row" id="dl-row">
+        <label>ZIP</label>
+        <a class="btn-dl" id="dl-link" href="#" download>↓ Download ZIP</a>
+        <span style="font-family:var(--mono);font-size:.65rem;color:var(--muted)">unzip → push to GitHub Pages</span>
+      </div>
+
+      <div id="gh-result-row" style="display:none">
+        <div class="result-row">
+          <label>REPO</label>
+          <span class="result-url" id="repo-url"></span>
+          <button class="btn-copy" data-target="repo-url">Copy</button>
+        </div>
+        <div class="result-row">
+          <label>LIVE URL</label>
+          <span class="result-url" id="pages-url"></span>
+          <button class="btn-copy" data-target="pages-url">Copy</button>
+        </div>
+        <div class="pages-note">
+          ⏱ GitHub Pages takes <strong>1–3 minutes</strong> to go live after publishing.
+          <br>Open the link above after a moment — if it's not live yet, wait and refresh.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <button id="reset-btn">↺ &nbsp;Build another</button>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+  let glbFile = null, usdzFile = null, tokenVerified = false;
+
+  const $ = id => document.getElementById(id);
+
+  // ── File drop zones ──────────────────────────────────────────────────────
+  function setupDrop(dzId, inputId, nameId, ext, onFile) {
+    const dz = $(dzId), inp = $(inputId), nm = $(nameId);
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+    dz.addEventListener('drop', e => {
+      e.preventDefault(); dz.classList.remove('over');
+      const f = [...e.dataTransfer.files].find(f => f.name.toLowerCase().endsWith(ext));
+      if (f) setFile(f); else toast(`Drop a ${ext} file`, 'err');
+    });
+    inp.addEventListener('change', () => { if (inp.files[0]) setFile(inp.files[0]); inp.value = ''; });
+    function setFile(f) {
+      onFile(f);
+      nm.textContent = f.name;
+      dz.classList.add('filled');
+      updateBtn();
+    }
+  }
+
+  setupDrop('dz-glb',  'fi-glb',  'glb-name',  '.glb',  f => glbFile  = f);
+  setupDrop('dz-usdz', 'fi-usdz', 'usdz-name', '.usdz', f => usdzFile = f);
+
+  // ── GitHub toggle ────────────────────────────────────────────────────────
+  $('gh-toggle').addEventListener('change', () => {
+    $('gh-fields').style.display = $('gh-toggle').checked ? 'block' : 'none';
+    updateBtn();
+  });
+
+  // ── Token verify ─────────────────────────────────────────────────────────
+  $('verify-btn').addEventListener('click', async () => {
+    const token = $('f-token').value.trim();
+    if (!token) return;
+    $('verify-btn').textContent = '…';
+    $('verify-btn').disabled = true;
+    try {
+      const res = await fetch('/api/validate-token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        $('token-status').textContent = `✓ Logged in as @${d.username}`;
+        $('token-status').className = 'ok';
+        tokenVerified = true;
+      } else {
+        $('token-status').textContent = `✗ ${d.error}`;
+        $('token-status').className = 'err';
+        tokenVerified = false;
+      }
+    } catch (_) {
+      $('token-status').textContent = '✗ Could not connect';
+      $('token-status').className = 'err';
+      tokenVerified = false;
+    }
+    $('verify-btn').textContent = 'Verify';
+    $('verify-btn').disabled = false;
+    updateBtn();
+  });
+
+  $('f-token').addEventListener('input', () => { tokenVerified = false; $('token-status').textContent = ''; updateBtn(); });
+
+  // ── Slug auto-format ──────────────────────────────────────────────────────
+  $('f-slug').addEventListener('input', () => {
+    $('f-slug').value = $('f-slug').value.toLowerCase().replace(/[^a-z0-9\-]/g, '-');
+  });
+
+  // ── Update button state ───────────────────────────────────────────────────
+  function updateBtn() {
+    const ghOn = $('gh-toggle').checked;
+    const ready = glbFile && usdzFile && $('f-slug').value.trim() && (!ghOn || tokenVerified);
+    $('build-btn').disabled = !ready;
+  }
+
+  ['f-slug', 'f-brand', 'f-label'].forEach(id => $(id).addEventListener('input', updateBtn));
+
+  // ── Build ─────────────────────────────────────────────────────────────────
+  $('build-btn').addEventListener('click', async () => {
+    const slug  = $('f-slug').value.trim();
+    const brand = $('f-brand').value.trim() || 'VIEW';
+    const label = $('f-label').value.trim() || 'On the menu';
+    const ghOn  = $('gh-toggle').checked;
+    const token = $('f-token').value.trim();
+
+    $('build-btn').disabled = true;
+    $('result-sec').style.display = 'none';
+    $('loading').style.display = 'block';
+    $('loading-txt').textContent = ghOn ? 'Building & publishing to GitHub…' : 'Building AR site…';
+
+    const fd = new FormData();
+    fd.append('glb', glbFile);
+    fd.append('usdz', usdzFile);
+    fd.append('slug', slug);
+    fd.append('brand', brand);
+    fd.append('label', label);
+    fd.append('push', ghOn ? 'true' : 'false');
+    if (ghOn) fd.append('token', token);
+
+    try {
+      const res = await fetch('/api/build', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Build failed');
+
+      $('loading').style.display = 'none';
+      $('result-sec').style.display = 'block';
+
+      // Download link
+      $('dl-link').href = data.zipPath;
+      $('dl-link').download = data.zipName;
+
+      // GitHub result
+      if (data.github) {
+        $('repo-url').textContent  = `https://github.com/${data.github.owner}/${data.github.repoName}`;
+        $('pages-url').textContent = data.github.url;
+        $('gh-result-row').style.display = 'block';
+      } else {
+        $('gh-result-row').style.display = 'none';
+      }
+
+      $('reset-btn').style.display = 'inline-block';
+      toast('AR site ready!', 'ok');
+
+    } catch (err) {
+      $('loading').style.display = 'none';
+      $('build-btn').disabled = false;
+      toast(err.message, 'err');
+    }
+  });
+
+  // ── Copy buttons ──────────────────────────────────────────────────────────
+  document.querySelectorAll('.btn-copy').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const txt = $(btn.dataset.target)?.textContent || '';
+      navigator.clipboard.writeText(txt).then(() => toast('Copied!', 'ok'));
+    });
+  });
+
+  // ── Reset ─────────────────────────────────────────────────────────────────
+  $('reset-btn').addEventListener('click', () => {
+    glbFile = usdzFile = null; tokenVerified = false;
+    ['dz-glb','dz-usdz'].forEach(id => $(id).classList.remove('filled','over'));
+    $('glb-name').textContent = 'no file selected';
+    $('usdz-name').textContent = 'no file selected';
+    $('f-slug').value = ''; $('f-brand').value = ''; $('f-label').value = 'On the menu';
+    $('token-status').textContent = ''; $('f-token').value = '';
+    $('gh-toggle').checked = false; $('gh-fields').style.display = 'none';
+    $('result-sec').style.display = 'none'; $('reset-btn').style.display = 'none';
+    updateBtn();
+  });
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  let tt;
+  function toast(msg, type='ok') {
+    const t = $('toast'); t.textContent = msg; t.className = `show ${type}`;
+    clearTimeout(tt); tt = setTimeout(() => t.className = '', 3000);
+  }
+</script>
+</body>
+</html>
